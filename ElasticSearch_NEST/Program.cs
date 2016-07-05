@@ -10,7 +10,7 @@ namespace ElasticSearch_NEST
         static void Main(string[] args)
         {
             var local = new Uri("http://localhost:9200");
-            string indexName = "blog_post_index";
+            string indexName = "blog_post_author_index";
             var settings = new ConnectionSettings(local).DefaultIndex(indexName);
             var elastic = new ElasticClient(settings);
 
@@ -28,7 +28,11 @@ namespace ElasticSearch_NEST
             if (!elastic.IndexExists(indexName).Exists)
             {
                 var createIndexResponse = elastic.CreateIndex(indexName);
+                var mappingBlogPost = elastic.Map<BlogPost>(s=>s.AutoMap());
+                var mappingBlogAuthor = elastic.Map<Author>(s => s.AutoMap());
                 Console.WriteLine("createIndexResponse=" + createIndexResponse.IsValid);
+                Console.WriteLine("mappingBlogPost=" + mappingBlogPost.IsValid);
+                Console.WriteLine("mappingBlogAuthor=" + mappingBlogAuthor.IsValid);
             }
 
             IIndexResponse indexResponse = elastic.Index(blogPost, i => i
@@ -230,16 +234,34 @@ namespace ElasticSearch_NEST
             //Nested Types and Nested Query
             Console.WriteLine("*******Nested Types and Nested Query*************");
 
-            var author1 = new Author { Id = Guid.NewGuid(), FirstName = "John", LastName = "Doe" };
-            var author2 = new Author { Id = Guid.NewGuid(), FirstName = "Notjohn", LastName = "Doe" };
-            var author3 = new Author { Id = Guid.NewGuid(), FirstName = "John", LastName = "Notdoe" };
-            
+            var authors=new[]
+            {
+                new Author { Id = Guid.NewGuid(), FirstName = "John", LastName = "Doe" },
+                new Author { Id = Guid.NewGuid(), FirstName = "Notjohn", LastName = "Doe" },
+                new Author { Id = Guid.NewGuid(), FirstName = "John", LastName = "Notdoe" }
+            };
+
+            foreach (var author in authors)
+            {
+                IIndexResponse indexResponse2 = elastic.Index(author, i => i
+                          .Index(indexName)
+                          .Type(typeof(Author))
+                          .Id(Guid.NewGuid())
+                          .Refresh());
+                Console.WriteLine("IIndexResponse=" + indexResponse2.IsValid);
+            }
+           
+
+            Console.WriteLine("IIndexResponse=" + indexResponse.IsValid);
+
             var blogPostWithAuthor = new[]
             {
-                new BlogPost { Id = Guid.NewGuid(), Title = "test post 1", Body = "1" , Author = author1 },
-                new BlogPost { Id = Guid.NewGuid(), Title = "test post 2", Body = "2" , Author = author2 },
-                new BlogPost { Id = Guid.NewGuid(), Title = "test post 3", Body = "3" , Author = author3 }
+                new BlogPost { Id = Guid.NewGuid(), Title = "test post 1", Body = "1" , Author = authors[0] },
+                new BlogPost { Id = Guid.NewGuid(), Title = "test post 2", Body = "2" , Author = authors[1] },
+                new BlogPost { Id = Guid.NewGuid(), Title = "test post 3", Body = "3" , Author = authors[2] }
             };
+
+
 
             foreach (var blogPostAuthor in blogPostWithAuthor)
             {
@@ -256,7 +278,7 @@ namespace ElasticSearch_NEST
                         .Path(b => b.Author)
                         .Query(nq =>
                             nq.Match(m1 => m1.Field(f1 => f1.Author.FirstName).Query("John")) &&
-                            nq.Match(m2 => m2.Field(f2 => f2.Author.LastName).Query("Doe"))))
+                            nq.Match(m2 => m2.Field(f2 => f2.Author.LastName).Query("Notdoe"))))
                             ));
 
             Console.WriteLine(nestedQuery.IsValid);
